@@ -3,14 +3,6 @@ const Order = require('../models/Order');
 
 const finishedStatuses = ['finished', 'lost', 'false'];
 const BATCH_SIZE = 100;
-const CONCURRENT_LIMIT = 20;
-
-async function processInChunks(array, chunkSize, fn) {
-  for (let i = 0; i < array.length; i += chunkSize) {
-    const chunk = array.slice(i, i + chunkSize);
-    await Promise.allSettled(chunk.map(fn));
-  }
-}
 
 async function updateOrderStatuses() {
   const apiKey = process.env.IDOSSELL_API_KEY;
@@ -33,25 +25,27 @@ async function updateOrderStatuses() {
 
     if (!orders.length) break;
 
-    let batchUpdated = 0;
-    let batchFinished = 0;
+    const orderIds = orders.map(order => order.orderId);
 
-    await processInChunks(orders, CONCURRENT_LIMIT, async (order) => {
-      try {
-        const res = await axios.post(apiUrl, {
-          params: { ordersIds: [order.orderId] }
-        }, {
-          headers: {
-            'X-API-Key': apiKey,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          timeout: 15000
-        });
+    try {
+      const res = await axios.post(apiUrl, {
+        params: { ordersIds: orderIds }
+      }, {
+        headers: {
+          'X-API-Key': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 30000
+      });
 
-        const apiOrder = res.data?.Results?.find(o => o.orderId === order.orderId);
+      const apiResults = res.data?.Results || [];
+      let batchUpdated = 0;
+      let batchFinished = 0;
+
+      for (const order of orders) {
+        const apiOrder = apiResults.find(o => o.orderId === order.orderId);
         const apiStatus = apiOrder?.orderDetails?.orderStatus;
-
         if (apiStatus && apiStatus !== order.status) {
           await Order.updateOne({ orderId: order.orderId }, { $set: { status: apiStatus } });
           console.log(`[ORDER STATUS CRON] Updated order ${order.orderId}: "${order.status}" -> "${apiStatus}"`);
@@ -62,10 +56,10 @@ async function updateOrderStatuses() {
             totalFinished++;
           }
         }
-      } catch (err) {
-        console.error(`[ORDER STATUS CRON] Error updating order ${order.orderId}:`, err.message);
       }
-    });
+    } catch (err) {
+      console.error(`[ORDER STATUS CRON] Error updating orders batch:`, err.message);
+    }
 
     lastId = orders[orders.length - 1]._id;
   }

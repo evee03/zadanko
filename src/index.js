@@ -3,15 +3,15 @@ const connectDB = require('./database/mongo');
 const { startOrderCron } = require('./crons/orderFetcher');
 const { startOrderStatusCron } = require('./crons/orderStatusUpdater');
 const { startOrderNoteCron } = require('./crons/orderNoteCron');
-const { fetchAndLogProducts } = require('./crons/productsInfoFetcher');
+const { startProductsCron } = require('./crons/productsInfoFetcher');
 
 async function main() {
   try {
     await connectDB();
-    startOrderCron();
-    startOrderStatusCron();
-    startOrderNoteCron();
-    //fetchAndLogProducts();
+    //startOrderCron();
+    //startOrderStatusCron();
+    //startOrderNoteCron();
+    startProductsCron();
 
     console.log('[START] Order Fetcher');
 

@@ -67,14 +67,35 @@ class OrderFetcher {
   }
 
   async fetchOrdersPage(lastFetchDate, page) {
-    const response = await axios.post(this.baseUrl, {
-      params: {
-        resultsLimit: this.pageSize,
-        resultsPage: page,
-        orderBy: 'orderAddDate',
-        orderDirection: 'asc'
-      }
-    }, {
+    let ordersDateBegin;
+    if (lastFetchDate) {
+      ordersDateBegin = typeof lastFetchDate === 'string'
+        ? lastFetchDate
+        : lastFetchDate.toISOString().slice(0, 19).replace('T', ' ');
+    } else {
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      ordersDateBegin = weekAgo.toISOString().slice(0, 19).replace('T', ' ');
+    }
+
+    const params = {
+      resultsLimit: this.pageSize,
+      resultsPage: page,
+      ordersRange: {
+        ordersDateRange: {
+          ordersDateType: "add", 
+          ordersDateBegin: ordersDateBegin
+        }
+      },
+      ordersBy: [
+        {
+          elementName: "orderAddDate",
+          sortDirection: "ASC"
+        }
+      ]
+    };
+
+    const response = await axios.post(this.baseUrl, { params }, {
       headers: {
         'X-API-Key': this.apiKey,
         'Content-Type': 'application/json',
@@ -83,17 +104,7 @@ class OrderFetcher {
       timeout: 30000
     });
 
-    const orders = response.data?.Results || [];
-    if (orders.length === 0) return [];
-
-    const filteredOrders = lastFetchDate
-      ? orders.filter(order => {
-          const orderDate = new Date(order.orderDetails?.orderAddDate || order.orderDetails?.purchaseDate);
-          return orderDate > new Date(lastFetchDate);
-        })
-      : orders;
-
-    return filteredOrders;
+    return response.data?.Results || [];
   }
 
   async saveOrdersToDatabase(orders) {
@@ -143,9 +154,9 @@ class OrderFetcher {
         deliveryDate: dispatch.deliveryDate,
         estimatedDeliveryDate: dispatch.estimatedDeliveryDate
       },
-      status: orderDetails.orderStatus || 'unknown',
-      source: orderSource.orderSourceName || 'unknown',
-      orderCreatedAt: new Date(orderDetails.orderAddDate || orderDetails.purchaseDate || Date.now())
+      status: orderDetails.orderStatus,
+      source: orderSource.orderSourceName,
+      orderCreatedAt: new Date(orderDetails.orderAddDate || orderDetails.purchaseDate)
     };
   }
 
