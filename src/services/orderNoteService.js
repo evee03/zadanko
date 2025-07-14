@@ -49,11 +49,6 @@ async function addNoteToNewOrders() {
     if (!processed) break;
 
     for (const order of orders) {
-      if (!order.orderId) {
-        console.warn(`[ORDER NOTE] Order ${order._id} missing orderId (idosell id) skipping.`);
-        continue;
-      }
-
       const idoRes = await addNoteToOrderInIdoSell(order.orderId);
       if (idoRes) {
 
